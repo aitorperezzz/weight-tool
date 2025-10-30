@@ -1,0 +1,13 @@
+services:
+  categories:
+    build: .
+    container_name: categories-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      - categories-net
+
+networks:
+  categories-net:
+    driver: bridge

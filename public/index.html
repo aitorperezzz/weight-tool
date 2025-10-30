@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grade Weight Tool</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjs/lib/browser/math.js"></script>
+  <style>
+    :root {
+      --purple: #5b3d9a;
+      --red-soft: #ffeaea;
+      --red-border: #e89a9a;
+      --bg: #f9fafc;
+      --white: #fff;
+    }
+
+    body {
+      font-family: system-ui, sans-serif;
+      padding: 1rem;
+      margin: 0 auto;
+      max-width: 900px;
+      background: var(--bg);
+      line-height: 1.4;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+      font-size: clamp(1.4rem, 4vw, 2rem);
+    }
+
+    .category {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 0.7rem 1rem;
+      margin-bottom: 0.7rem;
+      background: var(--white);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      transition: background-color 0.2s ease;
+      word-wrap: break-word;
+    }
+
+    .invalid {
+      background: var(--red-soft) !important;
+      border-color: var(--red-border);
+    }
+
+    .badge {
+      background: #e57373;
+      color: white;
+      font-size: 0.7rem;
+      border-radius: 5px;
+      padding: 2px 6px;
+      margin-left: 6px;
+    }
+
+    .category-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .subcats {
+      margin-left: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    button {
+      margin: 0.2rem;
+      padding: 0.4rem 0.6rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      background: var(--white);
+      color: var(--purple);
+      position: relative;
+      touch-action: manipulation;
+    }
+
+    button:hover {
+      background: #f2f2f2;
+    }
+
+    button[title]::after {
+      content: attr(title);
+      position: absolute;
+      bottom: 120%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--white);
+      color: #333;
+      border: 1px solid #ccc;
+      padding: 3px 6px;
+      border-radius: 5px;
+      font-size: 0.75rem;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease-in-out;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+      z-index: 10;
+    }
+
+    button:hover::after {
+      opacity: 1;
+    }
+
+    #chartContainer {
+      margin-top: 1.5rem;
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 320px !important;
+    }
+
+    table {
+      border-collapse: collapse;
+      margin-top: 1rem;
+      width: 100%;
+      font-size: 0.9rem;
+    }
+
+    th,
+    td {
+      border: 1px solid #ccc;
+      padding: 6px 10px;
+      text-align: left;
+    }
+
+    th {
+      background: #eee;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 600px) {
+      body {
+        padding: 0.5rem;
+      }
+
+      .category {
+        padding: 0.6rem 0.8rem;
+      }
+
+      button {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.5rem;
+      }
+
+      th,
+      td {
+        font-size: 0.8rem;
+        padding: 5px;
+      }
+
+      canvas {
+        height: 260px !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>📊 Grade Weight Tool</h1>
+
+  <div id="categories"></div>
+
+  <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:0.5rem; margin-bottom:1rem;">
+    <button onclick="addCategory()">➕ Add Category</button>
+    <button onclick="resetAll()">🔄 Reset</button>
+    <button onclick="finalize()">✅ Finalize</button>
+  </div>
+
+  <div id="chartContainer">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div id="results"></div>
+
+  <script>
+    let categories = [];
+    let myChart = null;
+
+    function addCategory(parent = null) {
+      const name = prompt("Category name:");
+      if (!name) return;
+      const weight = parseFloat(prompt("Weight (%) of this category relative to its parent:", "10")) || 0;
+      const newCat = { name, weight, subs: [] };
+      if (parent) parent.subs.push(newCat);
+      else categories.push(newCat);
+      render();
+    }
+
+    function addSubCategory(indexPath) {
+      const cat = getCategoryByIndexPath(indexPath);
+      addCategory(cat);
+    }
+
+    function removeCategory(indexPath) {
+      if (!confirm("Are you sure you want to delete this category?")) return;
+      if (indexPath.length === 1) {
+        categories.splice(indexPath[0], 1);
+      } else {
+        const parent = getCategoryByIndexPath(indexPath.slice(0, -1));
+        parent.subs.splice(indexPath[indexPath.length - 1], 1);
+      }
+      render();
+    }
+
+    function autoGenerateItems(indexPath) {
+      const cat = getCategoryByIndexPath(indexPath);
+      const numItems = parseInt(prompt("How many items to generate?", "5"));
+      if (!numItems || numItems < 1) return;
+      cat.subs = [];
+      const subWeight = 100 / numItems;
+      for (let i = 0; i < numItems; i++) {
+        cat.subs.push({
+          name: `${cat.name} Item ${i + 1}`,
+          weight: subWeight,
+          subs: []
+        });
+      }
+      render();
+    }
+
+    function getCategoryByIndexPath(path) {
+      return path.reduce((acc, idx) => acc.subs[idx], { subs: categories });
+    }
+
+    function resetAll() {
+      if (!confirm("Reset all categories?")) return;
+      categories = [];
+      render();
+    }
+
+    function subcategoriesValid(subs) {
+      if (!subs || subs.length === 0) return true;
+      const sum = subs.reduce((acc, c) => acc + c.weight, 0);
+      return Math.abs(sum - 100) < 0.01;
+    }
+
+    function validatePercentages(list, prefix = "") {
+      let warnings = [];
+      const sum = list.reduce((acc, c) => acc + c.weight, 0);
+      if (list === categories && Math.abs(sum - 100) > 0.01) {
+        warnings.push(`Root categories sum ${sum.toFixed(2)}%`);
+      }
+      for (const cat of list) {
+        if (cat.subs.length > 0) {
+          const subSum = cat.subs.reduce((acc, c) => acc + c.weight, 0);
+          if (Math.abs(subSum - 100) > 0.01) {
+            warnings.push(`${prefix ? prefix + " / " : ""}${cat.name} → sums ${subSum.toFixed(2)}%`);
+          }
+          warnings = warnings.concat(validatePercentages(cat.subs, prefix ? `${prefix} / ${cat.name}` : cat.name));
+        }
+      }
+      return warnings;
+    }
+
+    function render() {
+      const container = document.getElementById("categories");
+      const rootValid = subcategoriesValid(categories);
+      container.innerHTML = `
+        <div class="category ${!rootValid ? "invalid" : ""}">
+          <div class="category-header">
+            <div><b>All categories</b> ${!rootValid ? "<span class='badge'>⚠ Incomplete</span>" : ""}</div>
+          </div>
+          <div class='subcats'>
+            ${renderCategories(categories, [])}
+          </div>
+        </div>
+      `;
+      updateChart();
+      document.getElementById("results").innerHTML = "";
+    }
+
+    function renderCategories(list, path) {
+      return list.map((cat, i) => {
+        const thisPath = [...path, i];
+        const invalid = cat.subs.length > 0 && !subcategoriesValid(cat.subs);
+        return `
+          <div class="category ${invalid ? "invalid" : ""}">
+            <div class="category-header">
+              <div>
+                <b>${cat.name}</b> (${cat.weight.toFixed(2)}%)
+                ${invalid ? "<span class='badge'>⚠ Incomplete</span>" : ""}
+              </div>
+              <div>
+                <button title="Delete category" onclick='removeCategory([${thisPath}])'>❌</button>
+                ${cat.subs.length === 0 ? `<button title="Auto generate equal sub-items" onclick='autoGenerateItems([${thisPath}])'>🧩</button>` : ""}
+                <button title="Add subcategory" onclick='addSubCategory([${thisPath}])'>➕</button>
+              </div>
+            </div>
+            ${cat.subs.length ? `<div class='subcats'>${renderCategories(cat.subs, thisPath)}</div>` : ""}
+          </div>
+        `;
+      }).join("");
+    }
+
+    function collectAllWeights(list, prefix = "", parentWeight = 100) {
+      let items = [];
+      for (const cat of list) {
+        const fullName = prefix ? `${prefix} / ${cat.name}` : cat.name;
+        const totalWeight = (parentWeight * cat.weight) / 100;
+        if (cat.subs.length === 0) {
+          items.push({ name: fullName, local: cat.weight, total: totalWeight });
+        } else {
+          items = items.concat(collectAllWeights(cat.subs, fullName, totalWeight));
+        }
+      }
+      return items;
+    }
+
+    function finalize() {
+      try {
+        const problems = validatePercentages(categories);
+        if (problems.length > 0) {
+          alert("⚠️ Some categories don’t sum to 100%:\n" + problems.join("\n"));
+          return;
+        }
+        const items = collectAllWeights(categories);
+        if (items.length === 0) {
+          alert("⚠️ No leaf categories defined.");
+          return;
+        }
+        const validItems = items.filter(it => !isNaN(it.total) && it.total > 0);
+        const fractions = validItems.map(it => math.fraction(it.total));
+        const denoms = fractions.map(f => Number(f.d));
+        const lcm = denoms.reduce((a, b) => math.lcm(Number(a), Number(b)), 1);
+        const integers = fractions.map(f => Number(f.n) * (lcm / Number(f.d)));
+        const gcd = integers.reduce((a, b) => math.gcd(Number(a), Number(b)));
+        const finalInts = integers.map(v => v / gcd);
+
+        let html = `
+          <h2>🧮 Final integer weights</h2>
+          <table>
+            <tr><th>Item</th><th>Local %</th><th>Total %</th><th>Integer Value</th></tr>
+        `;
+        validItems.forEach((it, i) => {
+          html += `<tr>
+            <td>${it.name}</td>
+            <td>${it.local.toFixed(2)}%</td>
+            <td>${it.total.toFixed(4)}%</td>
+            <td><b>${finalInts[i]}</b></td>
+          </tr>`;
+        });
+        html += "</table>";
+        document.getElementById("results").innerHTML = html;
+      } catch (err) {
+        console.error("Finalize error:", err);
+        alert("❌ An error occurred while computing results. Check console for details.");
+      }
+    }
+
+    function updateChart() {
+      const canvas = document.getElementById("chart");
+      const ctx = canvas.getContext("2d");
+      if (myChart) myChart.destroy();
+
+      const items = collectAllWeights(categories);
+      if (items.length === 0) return;
+
+      myChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: items.map(i => i.name),
+          datasets: [{
+            label: "Total Weight (%)",
+            data: items.map(i => i.total),
+            backgroundColor: "#6c63ff55",
+            borderColor: "#6c63ff",
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          devicePixelRatio: window.devicePixelRatio,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, title: { display: true, text: "Total %" } } }
+        }
+      });
+    }
+
+    window.addEventListener("resize", fixCanvasResolution);
+    function fixCanvasResolution() {
+      const canvas = document.getElementById("chart");
+      if (!canvas) return;
+      const ratio = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      updateChart();
+    }
+
+    render();
+  </script>
+</body>
+
+</html>
