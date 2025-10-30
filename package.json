@@ -1,7 +1,7 @@
 {
-  "name": "categories",
+  "name": "weight-tool",
   "version": "1.0.0",
-  "description": "Define categories",
+  "description": "Define weight-tool",
   "main": "app.js",
   "type": "module",
   "scripts": {

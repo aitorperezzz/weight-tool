@@ -1,13 +1,13 @@
 services:
-  categories:
+  weight-tool:
     build: .
-    container_name: categories-app
+    container_name: weight-tool-app
     restart: unless-stopped
     ports:
       - "3000:3000"
     networks:
-      - categories-net
+      - weight-tool-net
 
 networks:
-  categories-net:
+  weight-tool-net:
     driver: bridge

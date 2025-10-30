@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Grade Weight Tool</title>
+  <title>Weight Tool</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mathjs/lib/browser/math.js"></script>
   <style>
@@ -168,7 +168,7 @@
 </head>
 
 <body>
-  <h1>📊 Grade Weight Tool</h1>
+  <h1>📊 Weight Tool</h1>
 
   <div id="categories"></div>
 
@@ -322,7 +322,7 @@
       try {
         const problems = validatePercentages(categories);
         if (problems.length > 0) {
-          alert("⚠️ Some categories don’t sum to 100%:\n" + problems.join("\n"));
+          alert("⚠️ Some categories don't sum to 100%:\n" + problems.join("\n"));
           return;
         }
         const items = collectAllWeights(categories);
