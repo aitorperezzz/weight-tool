@@ -86,30 +86,6 @@
       background: #f2f2f2;
     }
 
-    button[title]::after {
-      content: attr(title);
-      position: absolute;
-      bottom: 120%;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--white);
-      color: #333;
-      border: 1px solid #ccc;
-      padding: 3px 6px;
-      border-radius: 5px;
-      font-size: 0.75rem;
-      white-space: nowrap;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.15s ease-in-out;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-      z-index: 10;
-    }
-
-    button:hover::after {
-      opacity: 1;
-    }
-
     #chartContainer {
       margin-top: 1.5rem;
       width: 100%;
@@ -139,7 +115,6 @@
       background: #eee;
     }
 
-    /* Mobile optimizations */
     @media (max-width: 600px) {
       body {
         padding: 0.5rem;
@@ -188,10 +163,26 @@
     let categories = [];
     let myChart = null;
 
+    // Parse weight as fraction of 1 (e.g. 1/3, 0.25, 0.5)
+    function parseWeightInput(str) {
+      if (!str) return math.fraction(0);
+      str = str.trim();
+      try {
+        return math.fraction(str);
+      } catch {
+        const num = parseFloat(str);
+        if (isNaN(num)) return math.fraction(0);
+        return math.fraction(num);
+      }
+    }
+
+    const f2n = f => (typeof f === "number" ? f : math.number(f));
+
     function addCategory(parent = null) {
       const name = prompt("Category name:");
       if (!name) return;
-      const weight = parseFloat(prompt("Weight (%) of this category relative to its parent:", "10")) || 0;
+      const weightStr = prompt("Weight (fraction of 1, e.g. 1/3, 0.5, 0.25):", "0.1");
+      const weight = parseWeightInput(weightStr);
       const newCat = { name, weight, subs: [] };
       if (parent) parent.subs.push(newCat);
       else categories.push(newCat);
@@ -219,7 +210,7 @@
       const numItems = parseInt(prompt("How many items to generate?", "5"));
       if (!numItems || numItems < 1) return;
       cat.subs = [];
-      const subWeight = 100 / numItems;
+      const subWeight = math.fraction(1 / numItems);
       for (let i = 0; i < numItems; i++) {
         cat.subs.push({
           name: `${cat.name} Item ${i + 1}`,
@@ -242,22 +233,27 @@
 
     function subcategoriesValid(subs) {
       if (!subs || subs.length === 0) return true;
-      const sum = subs.reduce((acc, c) => acc + c.weight, 0);
-      return Math.abs(sum - 100) < 0.01;
+      let sum = math.fraction(0);
+      for (const c of subs) sum = math.add(sum, c.weight);
+      const sumNum = f2n(sum);
+      return Math.abs(sumNum - 1) < 0.0001;
     }
 
     function validatePercentages(list, prefix = "") {
       let warnings = [];
-      const sum = list.reduce((acc, c) => acc + c.weight, 0);
-      if (list === categories && Math.abs(sum - 100) > 0.01) {
-        warnings.push(`Root categories sum ${sum.toFixed(2)}%`);
+      if (list === categories) {
+        let rootSum = math.fraction(0);
+        for (const c of list) rootSum = math.add(rootSum, c.weight);
+        if (Math.abs(f2n(rootSum) - 1) > 0.0001)
+          warnings.push(`Root categories sum ${(f2n(rootSum) * 100).toFixed(2)}%`);
       }
       for (const cat of list) {
         if (cat.subs.length > 0) {
-          const subSum = cat.subs.reduce((acc, c) => acc + c.weight, 0);
-          if (Math.abs(subSum - 100) > 0.01) {
-            warnings.push(`${prefix ? prefix + " / " : ""}${cat.name} → sums ${subSum.toFixed(2)}%`);
-          }
+          let subSum = math.fraction(0);
+          for (const c of cat.subs) subSum = math.add(subSum, c.weight);
+          const subSumNum = f2n(subSum);
+          if (Math.abs(subSumNum - 1) > 0.0001)
+            warnings.push(`${prefix ? prefix + " / " : ""}${cat.name} → sums ${(subSumNum * 100).toFixed(2)}%`);
           warnings = warnings.concat(validatePercentages(cat.subs, prefix ? `${prefix} / ${cat.name}` : cat.name));
         }
       }
@@ -285,11 +281,12 @@
       return list.map((cat, i) => {
         const thisPath = [...path, i];
         const invalid = cat.subs.length > 0 && !subcategoriesValid(cat.subs);
+        const pct = f2n(cat.weight) * 100;
         return `
           <div class="category ${invalid ? "invalid" : ""}">
             <div class="category-header">
               <div>
-                <b>${cat.name}</b> (${cat.weight.toFixed(2)}%)
+                <b>${cat.name}</b> (${pct.toFixed(2)}%)
                 ${invalid ? "<span class='badge'>⚠ Incomplete</span>" : ""}
               </div>
               <div>
@@ -304,11 +301,11 @@
       }).join("");
     }
 
-    function collectAllWeights(list, prefix = "", parentWeight = 100) {
+    function collectAllWeights(list, prefix = "", parentWeight = math.fraction(1)) {
       let items = [];
       for (const cat of list) {
         const fullName = prefix ? `${prefix} / ${cat.name}` : cat.name;
-        const totalWeight = (parentWeight * cat.weight) / 100;
+        const totalWeight = math.multiply(parentWeight, cat.weight);
         if (cat.subs.length === 0) {
           items.push({ name: fullName, local: cat.weight, total: totalWeight });
         } else {
@@ -322,7 +319,7 @@
       try {
         const problems = validatePercentages(categories);
         if (problems.length > 0) {
-          alert("⚠️ Some categories don't sum to 100%:\n" + problems.join("\n"));
+          alert("⚠️ Some categories don't sum to 1:\n" + problems.join("\n"));
           return;
         }
         const items = collectAllWeights(categories);
@@ -330,12 +327,13 @@
           alert("⚠️ No leaf categories defined.");
           return;
         }
-        const validItems = items.filter(it => !isNaN(it.total) && it.total > 0);
-        const fractions = validItems.map(it => math.fraction(it.total));
+
+        const validItems = items.filter(it => f2n(it.total) > 0);
+        const fractions = validItems.map(it => it.total);
         const denoms = fractions.map(f => Number(f.d));
-        const lcm = denoms.reduce((a, b) => math.lcm(Number(a), Number(b)), 1);
+        const lcm = denoms.reduce((a, b) => math.lcm(a, b), 1);
         const integers = fractions.map(f => Number(f.n) * (lcm / Number(f.d)));
-        const gcd = integers.reduce((a, b) => math.gcd(Number(a), Number(b)));
+        const gcd = integers.reduce((a, b) => math.gcd(a, b));
         const finalInts = integers.map(v => v / gcd);
 
         let html = `
@@ -346,16 +344,16 @@
         validItems.forEach((it, i) => {
           html += `<tr>
             <td>${it.name}</td>
-            <td>${it.local.toFixed(2)}%</td>
-            <td>${it.total.toFixed(4)}%</td>
+            <td>${(f2n(it.local) * 100).toFixed(2)}%</td>
+            <td>${(f2n(it.total) * 100).toFixed(4)}%</td>
             <td><b>${finalInts[i]}</b></td>
           </tr>`;
         });
         html += "</table>";
         document.getElementById("results").innerHTML = html;
       } catch (err) {
-        console.error("Finalize error:", err);
-        alert("❌ An error occurred while computing results. Check console for details.");
+        console.error(err);
+        alert("❌ Error while computing results.");
       }
     }
 
@@ -363,17 +361,15 @@
       const canvas = document.getElementById("chart");
       const ctx = canvas.getContext("2d");
       if (myChart) myChart.destroy();
-
       const items = collectAllWeights(categories);
       if (items.length === 0) return;
-
       myChart = new Chart(ctx, {
         type: "bar",
         data: {
           labels: items.map(i => i.name),
           datasets: [{
             label: "Total Weight (%)",
-            data: items.map(i => i.total),
+            data: items.map(i => f2n(i.total) * 100),
             backgroundColor: "#6c63ff55",
             borderColor: "#6c63ff",
             borderWidth: 1
@@ -382,24 +378,10 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          devicePixelRatio: window.devicePixelRatio,
           plugins: { legend: { display: false } },
           scales: { y: { beginAtZero: true, title: { display: true, text: "Total %" } } }
         }
       });
-    }
-
-    window.addEventListener("resize", fixCanvasResolution);
-    function fixCanvasResolution() {
-      const canvas = document.getElementById("chart");
-      if (!canvas) return;
-      const ratio = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * ratio;
-      canvas.height = rect.height * ratio;
-      const ctx = canvas.getContext("2d");
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      updateChart();
     }
 
     render();
