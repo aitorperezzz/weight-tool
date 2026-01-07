@@ -1,13 +1,8 @@
 services:
   weight-tool:
     build: .
-    container_name: weight-tool-app
+    image: weight-tool:latest
+    container_name: weight-tool
     restart: unless-stopped
     ports:
       - "3000:3000"
-    networks:
-      - weight-tool-net
-
-networks:
-  weight-tool-net:
-    driver: bridge
