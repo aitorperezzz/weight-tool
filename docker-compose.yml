@@ -1,7 +1,7 @@
 services:
   weight-tool:
     build: .
-    image: weight-tool:latest
+    image: registry.home:5000/weight-tool:latest
     container_name: weight-tool
     restart: unless-stopped
     ports:
