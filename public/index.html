@@ -184,6 +184,13 @@
       }
 
       const f2n = (f) => (typeof f === "number" ? f : math.number(f));
+      const escapeHtml = (value) =>
+        String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
 
       function addCategory(parent = null) {
         const name = prompt("Category name:");
@@ -303,11 +310,12 @@
             const invalid =
               cat.subs.length > 0 && !subcategoriesValid(cat.subs);
             const pct = f2n(cat.weight) * 100;
+            const name = escapeHtml(cat.name);
             return `
           <div class="category ${invalid ? "invalid" : ""}">
             <div class="category-header">
               <div>
-                <b>${cat.name}</b> (${pct.toFixed(2)}%)
+                <b>${name}</b> (${pct.toFixed(2)}%)
                 ${invalid ? "<span class='badge'>⚠ Incomplete</span>" : ""}
               </div>
               <div>
@@ -377,7 +385,7 @@
         `;
           validItems.forEach((it, i) => {
             html += `<tr>
-            <td>${it.name}</td>
+            <td>${escapeHtml(it.name)}</td>
             <td>${(f2n(it.local) * 100).toFixed(2)}%</td>
             <td>${(f2n(it.total) * 100).toFixed(4)}%</td>
             <td><b>${finalInts[i]}</b></td>
