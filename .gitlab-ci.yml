@@ -13,7 +13,7 @@ build-image:
   stage: build
   image: quay.io/buildah/stable:latest
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "master"'
   before_script:
     - buildah --storage-driver "$STORAGE_DRIVER" login --tls-verify="$REGISTRY_TLS_VERIFY" --username "$CI_REGISTRY_USER" --password "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
   script:
