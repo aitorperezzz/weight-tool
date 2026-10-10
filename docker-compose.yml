@@ -1,7 +1,6 @@
 services:
   weight-tool:
-    build: .
-    image: ${IMAGE:-weight-tool:latest}
+    image: ghcr.io/aitorperezzz/weight-tool:latest
     container_name: weight-tool
     restart: unless-stopped
     ports:
